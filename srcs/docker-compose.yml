@@ -1,0 +1,168 @@
+services:
+  mariadb:
+    build: 
+      context: requirements/mariadb
+      dockerfile: Dockerfile
+
+    image: mariadb
+    container_name: mariadb
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    networks:
+      - inception 
+    restart: always
+    env_file: 
+      - .env
+    secrets:
+      - db_root_password
+      - db_password
+
+  wordpress:
+    depends_on:
+      - mariadb
+      - redis
+    build: 
+      context: requirements/wordpress
+      dockerfile: Dockerfile
+
+    image: wordpress
+    container_name: wordpress
+    volumes:
+      - wordpress_data:/var/www/html/
+    networks:
+      - inception 
+    restart: always
+    env_file: 
+      - .env
+    secrets:
+      - db_password
+      - wp_user_password
+      - credentials
+
+  nginx:
+    depends_on:
+      - wordpress
+    build: 
+      context: requirements/nginx
+      dockerfile: Dockerfile
+
+    image: nginx
+    container_name: nginx
+    volumes:
+      - wordpress_data:/var/www/html/
+    networks:
+      - inception 
+    restart: always
+    env_file: 
+      - .env
+    ports:
+      - "443:443"
+
+
+## bonus
+  redis:
+    build:
+      context: ./requirements/bonus/redis
+    image: redis
+    container_name: redis
+    networks:
+      - inception
+    restart: always
+
+  adminer:
+    depends_on:
+      - mariadb
+    build:
+      context: ./requirements/bonus/adminer
+    image: adminer
+    container_name: adminer
+    networks:
+      - inception
+    restart: always
+    ports:
+      - "8080:8080"
+
+  static_website:
+    build:
+      context: ./requirements/bonus/static_website
+    image: static_website
+    container_name: static_website
+    networks:
+      - inception
+    restart: always
+    ports:
+      - "8081:8081"
+
+  ftp:
+    depends_on:
+      - wordpress
+    build:
+      context: ./requirements/bonus/ftp
+    image: ftp
+    container_name: ftp
+    networks:
+      - inception
+    volumes:
+      - wordpress_data:/var/www/html
+    restart: always
+    secrets:
+      - ftp_password
+    ports:
+      - "21:21"
+      - "21100-21110:21100-21110"
+
+  portainer:
+    build:
+      context: ./requirements/bonus/portainer
+    image: portainer
+    container_name: portainer
+    networks:
+      - inception
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+    restart: always
+    ports:
+      - "9443:9443"
+
+## volumes
+volumes:
+  wordpress_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /home/jesstava/data/wordpress
+
+  mariadb_data:
+    driver: local
+    driver_opts:
+        type: none
+        o: bind
+        device: /home/jesstava/data/mariadb
+
+  portainer_data:
+    driver: local
+    driver_opts:
+        type: none
+        o: bind
+        device: /home/jesstava/data/portainer
+
+
+## network
+networks:
+  inception:
+    driver: bridge
+
+## secrets
+secrets:
+  credentials:
+    file: ../secrets/credentials.txt
+  db_root_password:
+    file: ../secrets/db_root_password.txt
+  db_password:
+    file: ../secrets/db_password.txt
+  wp_user_password:
+    file: ../secrets/wp_user_password.txt
+  ftp_password:
+    file: ../secrets/ftp_password.txt
